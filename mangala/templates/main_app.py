@@ -17,8 +17,8 @@ DB_NAME = os.path.join(BASE_DIR, "users_v2.db")
 # SMTP AYARLARI (GMAIL ÖRNEĞİ)
 # Gerçek mail göndermek için burayı doldurmalısınız.
 # Doldurmazsanız kod KONSOLA yazılır.
-SMTP_EMAIL = ""          # Örn: "benimmailim@gmail.com"
-SMTP_PASSWORD = ""       # Örn: "google-app-password" (Normal şifre değil!)
+SMTP_EMAIL = "aaihl6d@gmail.com"          # Örn: "benimmailim@gmail.com"
+SMTP_PASSWORD = "utgc bqra mevc dgme"       # Örn: "google-app-password" (Normal şifre değil!)
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
