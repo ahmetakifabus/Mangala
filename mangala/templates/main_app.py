@@ -1,28 +1,33 @@
-from flask import Flask, request, jsonify, send_file
-import sqlite3
 import os
 import random
+import sqlite3
 import smtplib
+from flask import Flask, request, jsonify, send_file
 from email.mime.text import MIMEText
 from werkzeug.security import generate_password_hash, check_password_hash
+import google.generativeai as genai
 
 app = Flask(__name__, template_folder='.')
 
 # --- AYARLAR ---
-# Dosya yollarını garantiye almak için tam yol kullanıyoruz
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Veritabanı ismini değiştirdik (v2) ki eski tabloyla çakışma olmasın
 DB_NAME = os.path.join(BASE_DIR, "users_v2.db")
 
-# SMTP AYARLARI (GMAIL ÖRNEĞİ)
-# Gerçek mail göndermek için burayı doldurmalısınız.
-# Doldurmazsanız kod KONSOLA yazılır.
-SMTP_EMAIL = "aaihl6d@gmail.com"          # Örn: "benimmailim@gmail.com"
-SMTP_PASSWORD = "utgc bqra mevc dgme"       # Örn: "google-app-password" (Normal şifre değil!)
+# 1. E-POSTA AYARLARI (GMAIL)
+SMTP_EMAIL = ""          # Örn: "mailin@gmail.com"
+SMTP_PASSWORD = ""       # Örn: "google-app-password" (16 haneli kod)
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
-# Veritabanını Başlat
+# 2. GEMINI API AYARI
+# Buraya Google AI Studio'dan aldığın API Key'i yapıştır
+GEMINI_API_KEY = "" 
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel('gemini-2.0-flash')
+
+# --- VERİTABANI KURULUMU ---
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
@@ -44,23 +49,43 @@ def init_db():
         ''')
         conn.commit()
 
-# Uygulama başlarken veritabanını kontrol et
 init_db()
 
+# --- ANA SAYFA ---
 @app.route('/')
 def index():
     return send_file('index.html')
 
+# --- API: SSH ANAHTARINI GÖSTER ---
 @app.route('/ssh')
 def ssh_page():
-    # Eski SSH sayfasını koruyalım
     try:
         ssh_path = os.path.expanduser('~/.ssh/id_rsa.pub')
         if os.path.exists(ssh_path):
             with open(ssh_path, 'r') as f:
-                return f"<pre>{f.read()}</pre>"
-        return "SSH Anahtarı yok."
-    except: return "Hata"
+                return f"""
+                <div style="font-family: monospace; max-width: 800px; margin: 50px auto; padding: 20px; border: 1px solid #ccc; background: #f9f9f9;">
+                    <h3>SSH Anahtarınız:</h3>
+                    <textarea style="width:100%; height:150px;">{f.read()}</textarea>
+                </div>
+                """
+        return "SSH Anahtarı bulunamadı. Konsoldan 'ssh-keygen' çalıştırın."
+    except: return "Hata oluştu."
+
+# --- API: GEMINI'YE SOR ---
+@app.route('/api/ask-gemini', methods=['POST'])
+def ask_gemini():
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "Sunucuda API anahtarı eksik."}), 500
+        
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        # Gemini'ye sor
+        response = gemini_model.generate_content(prompt)
+        return jsonify({"text": response.text})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # --- API: DOĞRULAMA KODU GÖNDER ---
 @app.route('/api/send-code', methods=['POST'])
@@ -73,23 +98,21 @@ def send_code():
         if not email or not username:
             return jsonify({"error": "E-posta ve kullanıcı adı gerekli"}), 400
 
-        # Kullanıcı zaten var mı?
+        # Kullanıcı kontrolü
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM users WHERE email = ? OR username = ?", (email, username))
             if cursor.fetchone():
                 return jsonify({"error": "Bu kullanıcı adı veya e-posta zaten kayıtlı."}), 409
 
-        # 6 Haneli Kod Üret
+        # Kod üret ve kaydet
         code = str(random.randint(100000, 999999))
-
-        # Kodu veritabanına kaydet (Varsa güncelle)
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
             cursor.execute("INSERT OR REPLACE INTO verification_codes (email, code) VALUES (?, ?)", (email, code))
             conn.commit()
 
-        # Mail Gönderme İşlemi
+        # Mail Gönder
         if SMTP_EMAIL and SMTP_PASSWORD:
             try:
                 msg = MIMEText(f"Merhaba {username},\n\nAkıllı Mangala kayıt kodunuz: {code}\n\nİyi oyunlar!")
@@ -101,20 +124,20 @@ def send_code():
                     server.starttls()
                     server.login(SMTP_EMAIL, SMTP_PASSWORD)
                     server.sendmail(SMTP_EMAIL, email, msg.as_string())
-                print(f"Mail gönderildi: {email} -> {code}")
+                print(f"Mail gönderildi: {email}")
             except Exception as e:
                 print(f"SMTP Hatası: {e}")
-                return jsonify({"error": "Mail gönderilemedi. Lütfen adresi kontrol edin."}), 500
+                print(f"⚠️ [YEDEK] Mail gönderilemedi. Kod: {code}") # Log dosyasına yazar
+                return jsonify({"error": "Mail sunucusuna bağlanılamadı. Bilgilerinizi kontrol edin."}), 500
         else:
-            # SMTP ayarı yoksa konsola yaz (Test için)
-            print(f"⚠️ [SİMÜLASYON] Mail Ayarlı Değil. {email} için kod: {code}")
+            print(f"⚠️ [SİMÜLASYON] Mail ayarlı değil. {email} için kod: {code}")
             
         return jsonify({"message": "Kod gönderildi."}), 200
 
     except Exception as e:
         return jsonify({"error": f"Sunucu hatası: {str(e)}"}), 500
 
-# --- API: KODU DOĞRULA VE KAYDET ---
+# --- API: KAYIT OL (KOD DOĞRULAMA İLE) ---
 @app.route('/api/verify-register', methods=['POST'])
 def verify_register():
     try:
@@ -127,20 +150,17 @@ def verify_register():
         if not all([username, email, password, code]):
             return jsonify({"error": "Eksik bilgi."}), 400
 
-        # Kodu kontrol et
         with sqlite3.connect(DB_NAME) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT code FROM verification_codes WHERE email = ?", (email,))
             record = cursor.fetchone()
 
             if not record or record[0] != code:
-                return jsonify({"error": "Geçersiz veya hatalı kod."}), 400
+                return jsonify({"error": "Hatalı veya geçersiz kod."}), 400
 
-            # Kod doğru, kullanıcıyı kaydet
             hashed_pw = generate_password_hash(password)
             try:
                 cursor.execute("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", (username, email, hashed_pw))
-                # Kullanılan kodu sil
                 cursor.execute("DELETE FROM verification_codes WHERE email = ?", (email,))
                 conn.commit()
             except sqlite3.IntegrityError:
@@ -151,6 +171,7 @@ def verify_register():
     except Exception as e:
         return jsonify({"error": f"Kayıt hatası: {str(e)}"}), 500
 
+# --- API: GİRİŞ YAP ---
 @app.route('/api/login', methods=['POST'])
 def login():
     try:
