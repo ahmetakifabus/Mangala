@@ -1,0 +1,715 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { RefreshCw, Users, Brain, Info, User, Lock, LogOut, ArrowRight, Gamepad2, Sparkles, MessageSquare } from 'lucide-react';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// --- GEMINI API AYARLARI ---
+const apiKey = ""; // Execution environment will provide the key
+const genAI = new GoogleGenerativeAI(apiKey);
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-09-2025" });
+
+// --- TİP TANIMLAMALARI ---
+type Player = 'PLAYER' | 'OPPONENT'; 
+type GameState = 'PLAYING' | 'ENDED';
+type GameMode = 'AI' | 'PVP';
+type Difficulty = 'EASY' | 'HARD';
+type View = 'AUTH' | 'MENU' | 'GAME';
+type AuthMode = 'LOGIN' | 'REGISTER';
+
+// Başlangıç durumu
+const INITIAL_BOARD = [4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0];
+
+export default function App() {
+  const [view, setView] = useState<View>('AUTH');
+  const [user, setUser] = useState<{ username: string } | null>(null);
+  const [gameMode, setGameMode] = useState<GameMode>('AI');
+
+  const handleLogin = (username: string) => {
+    setUser({ username });
+    setView('MENU');
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setView('AUTH');
+  };
+
+  const startGame = (mode: GameMode) => {
+    setGameMode(mode);
+    setView('GAME');
+  };
+
+  const goBackToMenu = () => {
+    setView('MENU');
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-100 font-sans text-stone-800">
+      {view === 'AUTH' && <AuthScreen onLogin={handleLogin} />}
+      {view === 'MENU' && user && (
+        <MenuScreen 
+          username={user.username} 
+          onStartGame={startGame} 
+          onLogout={handleLogout} 
+        />
+      )}
+      {view === 'GAME' && user && (
+        <MangalaGame 
+          gameMode={gameMode} 
+          username={user.username} 
+          onExit={goBackToMenu} 
+        />
+      )}
+    </div>
+  );
+}
+
+// --- GİRİŞ / KAYIT EKRANI ---
+function AuthScreen({ onLogin }: { onLogin: (username: string) => void }) {
+  const [mode, setMode] = useState<AuthMode>('LOGIN');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!username || !password) {
+      setError('Lütfen tüm alanları doldurun.');
+      return;
+    }
+
+    if (username.length < 3) {
+      setError('Kullanıcı adı en az 3 karakter olmalıdır.');
+      return;
+    }
+    onLogin(username);
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-br from-amber-800 to-stone-900">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-amber-600 p-6 text-center">
+           <h1 className="text-3xl font-bold text-white flex items-center justify-center gap-2">
+             <Brain className="w-8 h-8" /> Akıllı Mangala
+           </h1>
+           <p className="text-amber-100 mt-2">Gemini Destekli Strateji Oyunu</p>
+        </div>
+        
+        <div className="p-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+            {mode === 'LOGIN' ? 'Giriş Yap' : 'Kayıt Ol'}
+          </h2>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Kullanıcı Adı</label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
+                <input 
+                  type="text" 
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
+                  placeholder="Kullanıcı adınız"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Şifre</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
+                <input 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
+                  placeholder="••••••"
+                />
+              </div>
+            </div>
+
+            {error && <p className="text-red-500 text-sm font-medium text-center">{error}</p>}
+
+            <button 
+              type="submit" 
+              className="w-full bg-amber-700 text-white py-3 rounded-lg font-bold hover:bg-amber-800 transition-colors shadow-lg active:scale-95 transform duration-150"
+            >
+              {mode === 'LOGIN' ? 'Giriş Yap' : 'Kayıt Ol'}
+            </button>
+          </form>
+
+          <div className="mt-3">
+             <button 
+                 type="button"
+                 onClick={() => onLogin('Misafir')}
+                 className="w-full bg-stone-200 text-stone-700 py-3 rounded-lg font-bold hover:bg-stone-300 transition-colors flex items-center justify-center gap-2"
+             >
+                 <Gamepad2 /> Demo Oyna (Üye Olmadan)
+             </button>
+          </div>
+
+          <div className="mt-6 text-center">
+            <p className="text-gray-600 text-sm">
+              {mode === 'LOGIN' ? "Hesabınız yok mu?" : "Zaten hesabınız var mı?"}
+              <button 
+                onClick={() => { setMode(mode === 'LOGIN' ? 'REGISTER' : 'LOGIN'); setError(''); }}
+                className="ml-1 text-amber-700 font-bold hover:underline"
+              >
+                {mode === 'LOGIN' ? "Kayıt Ol" : "Giriş Yap"}
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- MENÜ EKRANI ---
+function MenuScreen({ username, onStartGame, onLogout }: { username: string, onStartGame: (mode: GameMode) => void, onLogout: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-stone-100 relative">
+      <button 
+        onClick={onLogout}
+        className="absolute top-4 right-4 flex items-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg shadow hover:bg-red-50 transition-colors font-medium"
+      >
+        <LogOut size={18} /> Çıkış
+      </button>
+
+      <div className="text-center mb-10">
+        <h1 className="text-4xl font-bold text-amber-900 mb-2">Hoşgeldin, {username}!</h1>
+        <p className="text-stone-600 text-lg">Bugün nasıl oynamak istersin?</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+        <button 
+          onClick={() => onStartGame('AI')}
+          className="group relative bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all border-l-8 border-purple-600 hover:-translate-y-1"
+        >
+          <div className="absolute top-4 right-4 bg-purple-100 p-3 rounded-full">
+            <Brain className="w-8 h-8 text-purple-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-800 mb-2">Gemini Yapay Zeka</h3>
+          <p className="text-gray-500 mb-6">Seni analiz eden ve konuşan yapay zekaya karşı oyna.</p>
+          <span className="inline-flex items-center text-purple-700 font-bold group-hover:gap-2 transition-all">
+            Başla <ArrowRight className="ml-2 w-5 h-5" />
+          </span>
+        </button>
+
+        <button 
+          onClick={() => onStartGame('PVP')}
+          className="group relative bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all border-l-8 border-green-600 hover:-translate-y-1"
+        >
+          <div className="absolute top-4 right-4 bg-green-100 p-3 rounded-full">
+            <Users className="w-8 h-8 text-green-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-800 mb-2">2 Kişilik</h3>
+          <p className="text-gray-500 mb-6">Aynı cihazda arkadaşınla karşılıklı oyna.</p>
+          <span className="inline-flex items-center text-green-700 font-bold group-hover:gap-2 transition-all">
+            Başla <ArrowRight className="ml-2 w-5 h-5" />
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- OYUN BİLEŞENİ ---
+function MangalaGame({ gameMode, username, onExit }: { gameMode: GameMode, username: string, onExit: () => void }) {
+  const [board, setBoard] = useState<number[]>([...INITIAL_BOARD]);
+  const [turn, setTurn] = useState<Player>('PLAYER');
+  const [gameState, setGameState] = useState<GameState>('PLAYING');
+  const [winner, setWinner] = useState<Player | 'DRAW' | null>(null);
+  const [lastMessage, setLastMessage] = useState<string>("Oyuna başlamak için bir kuyu seçin.");
+  const [difficulty, setDifficulty] = useState<Difficulty>('HARD');
+  const [showRules, setShowRules] = useState(false);
+  
+  // Gemini State
+  const [aiComment, setAiComment] = useState<string>("");
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+  const [isGettingHint, setIsGettingHint] = useState(false);
+  
+  // Bir indeksin hangi oyuncuya ait olduğunu bulur
+  const isPlayerPit = (index: number) => index >= 0 && index <= 5;
+  const isOpponentPit = (index: number) => index >= 7 && index <= 12;
+  const getOppositePitIndex = (index: number) => 12 - index;
+
+  // --- GEMINI FONKSİYONLARI ---
+
+  // 1. İpucu İsteme Fonksiyonu
+  const getStrategicHint = async () => {
+    if (isGettingHint || gameState === 'ENDED') return;
+    setIsGettingHint(true);
+    setHint(null);
+
+    try {
+      const prompt = `
+        Sen bir Mangala (Mancala) oyun ustasısın. Şu an sıra oyuncuda (0-5 arası kuyular).
+        Mevcut tahta durumu (0-5 oyuncu, 6 oyuncu hazinesi, 7-12 rakip, 13 rakip hazinesi): ${JSON.stringify(board)}.
+        Mangala kurallarını (son taş hazineye gelirse tekrar oynama, boş kuyu kuralı, çift yapma kuralı) göz önüne alarak, oyuncu için EN İYİ hamleyi (hangi kuyu numarası 1-6 arası) öner ve nedenini tek bir kısa cümleyle açıkla.
+        Cevabı sadece Türkçe ver. Örnek: "3. kuyuyu oyna çünkü son taş hazinene geliyor."
+      `;
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      setHint(response.text());
+    } catch (error) {
+      console.error("Gemini Hint Error:", error);
+      setHint("Şu an yıldızlar biraz karışık, ipucu veremiyorum.");
+    } finally {
+      setIsGettingHint(false);
+    }
+  };
+
+  // 2. Oyun İçi Yorum (Trash Talk / Commentary)
+  const getAiCommentary = async (lastMoveResult: string, playerMoved: boolean) => {
+    // Sadece AI modunda ve belirli durumlarda konuşsun (her hamlede değil, şans faktörü ekleyelim)
+    if (gameMode !== 'AI' || Math.random() > 0.4) return;
+    
+    setIsAiThinking(true);
+    try {
+      const prompt = `
+        Sen Mangala oynayan esprili, hafif iğneleyici ve rekabetçi bir yapay zeka rakibisin.
+        Rakibin adı: ${username}.
+        Son olay: "${lastMoveResult}".
+        Şu anki skor: Ben (AI) ${board[13]}, Rakip ${board[6]}.
+        Bu duruma uygun, 10 kelimeyi geçmeyen kısa, eğlenceli, Türkçe bir tepki ver.
+        Eğer rakip iyi bir hamle yaptıysa hafif bozul, kötü hamle yaptıysa dalga geç.
+      `;
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      setAiComment(response.text());
+    } catch (error) {
+       // Sessiz kal
+    } finally {
+      setIsAiThinking(false);
+    }
+  };
+
+  // Oyun bitiş kontrolü
+  const checkGameOver = useCallback((currentBoard: number[]) => {
+    const playerSideEmpty = currentBoard.slice(0, 6).every(seeds => seeds === 0);
+    const opponentSideEmpty = currentBoard.slice(7, 13).every(seeds => seeds === 0);
+
+    if (playerSideEmpty || opponentSideEmpty) {
+      let finalBoard = [...currentBoard];
+      let playerTotal = finalBoard[6];
+      let opponentTotal = finalBoard[13];
+      
+      let remainingSeeds = 0;
+      if (playerSideEmpty) {
+        for (let i = 7; i <= 12; i++) {
+          remainingSeeds += finalBoard[i];
+          finalBoard[i] = 0;
+        }
+        playerTotal += remainingSeeds;
+        finalBoard[6] = playerTotal;
+      } else {
+        for (let i = 0; i <= 5; i++) {
+          remainingSeeds += finalBoard[i];
+          finalBoard[i] = 0;
+        }
+        opponentTotal += remainingSeeds;
+        finalBoard[13] = opponentTotal;
+      }
+
+      setBoard(finalBoard);
+      setGameState('ENDED');
+      
+      if (playerTotal > opponentTotal) setWinner('PLAYER');
+      else if (opponentTotal > playerTotal) setWinner('OPPONENT');
+      else setWinner('DRAW');
+      
+      return true;
+    }
+    return false;
+  }, []);
+
+  const executeMove = (currentIndex: number, currentBoard: number[], isSimulation: boolean = false): { newBoard: number[], nextTurn: Player, message: string } => {
+    let tempBoard = [...currentBoard];
+    let seeds = tempBoard[currentIndex];
+    
+    if (seeds === 0) return { newBoard: tempBoard, nextTurn: turn, message: "" };
+
+    const movingPlayer = currentIndex <= 5 ? 'PLAYER' : 'OPPONENT';
+    let message = "";
+
+    tempBoard[currentIndex] = 0;
+    let pos = currentIndex;
+
+    if (seeds === 1) {
+        pos = (pos + 1) % 14;
+        tempBoard[pos]++;
+    } else {
+        tempBoard[pos]++; 
+        seeds--;
+        while (seeds > 0) {
+            pos = (pos + 1) % 14;
+            if ((movingPlayer === 'PLAYER' && pos === 13) || (movingPlayer === 'OPPONENT' && pos === 6)) {
+                continue;
+            }
+            tempBoard[pos]++;
+            seeds--;
+        }
+    }
+
+    let nextTurn: Player = movingPlayer === 'PLAYER' ? 'OPPONENT' : 'PLAYER';
+
+    // Kural 1: Son taş hazineye
+    if ((movingPlayer === 'PLAYER' && pos === 6) || (movingPlayer === 'OPPONENT' && pos === 13)) {
+        nextTurn = movingPlayer;
+        message = isSimulation ? "" : "Son taş hazineye! Sıra tekrar aynı oyuncuda.";
+    } 
+    // Kural 2: Çift yapma
+    else if ((movingPlayer === 'PLAYER' && isOpponentPit(pos) && tempBoard[pos] % 2 === 0) ||
+             (movingPlayer === 'OPPONENT' && isPlayerPit(pos) && tempBoard[pos] % 2 === 0)) {
+        const treasuryIndex = movingPlayer === 'PLAYER' ? 6 : 13;
+        tempBoard[treasuryIndex] += tempBoard[pos];
+        tempBoard[pos] = 0;
+        message = isSimulation ? "" : "Çift yapıp hepsini topladın!";
+    }
+    // Kural 3: Boş kuyu
+    else if ((movingPlayer === 'PLAYER' && isPlayerPit(pos) && tempBoard[pos] === 1) ||
+             (movingPlayer === 'OPPONENT' && isOpponentPit(pos) && tempBoard[pos] === 1)) {
+        const oppositeIndex = getOppositePitIndex(pos);
+        if (tempBoard[oppositeIndex] > 0) {
+             const treasuryIndex = movingPlayer === 'PLAYER' ? 6 : 13;
+             const totalGain = tempBoard[pos] + tempBoard[oppositeIndex];
+             tempBoard[treasuryIndex] += totalGain;
+             tempBoard[pos] = 0;
+             tempBoard[oppositeIndex] = 0;
+             message = isSimulation ? "" : "Boş kuyu kuralı! Karşıyı da aldın.";
+        }
+    }
+
+    return { newBoard: tempBoard, nextTurn, message };
+  };
+
+  const handlePitClick = (index: number) => {
+    if (gameState === 'ENDED') return;
+    if (gameMode === 'AI' && turn === 'OPPONENT') return;
+    
+    // İpucunu temizle
+    setHint(null);
+
+    const isMyTurn = (turn === 'PLAYER' && isPlayerPit(index)) || 
+                     (turn === 'OPPONENT' && isOpponentPit(index));
+
+    if (!isMyTurn || board[index] === 0) return;
+
+    const result = executeMove(index, board);
+    setBoard(result.newBoard);
+    setTurn(result.nextTurn);
+    
+    // Yorumu güncelle (eğer önemli bir hamleyse)
+    if (gameMode === 'AI' && result.message) {
+        getAiCommentary(result.message, true);
+    }
+
+    if (result.message) setLastMessage(result.message);
+    else {
+        if (result.nextTurn === 'PLAYER') {
+            setLastMessage(`${username} oynuyor...`);
+        } else {
+            setLastMessage(gameMode === 'AI' ? "Gemini düşünüyor..." : "2. Oyuncu oynuyor...");
+        }
+    }
+  };
+
+  // Yapay Zeka Mantığı
+  useEffect(() => {
+    if (gameMode === 'AI' && turn === 'OPPONENT' && gameState === 'PLAYING') {
+      const timer = setTimeout(() => {
+        makeCpuMove();
+      }, 1500); // Biraz daha düşünme payı verelim
+      return () => clearTimeout(timer);
+    }
+    
+    if (gameState === 'PLAYING') {
+        checkGameOver(board);
+    }
+  }, [turn, board, gameState, checkGameOver, gameMode]);
+
+  const makeCpuMove = () => {
+    const validMoves: number[] = [];
+    for (let i = 7; i <= 12; i++) {
+      if (board[i] > 0) validMoves.push(i);
+    }
+
+    if (validMoves.length === 0) return;
+
+    let selectedMove = validMoves[0];
+
+    if (difficulty === 'EASY') {
+      selectedMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+    } else {
+      let bestScore = -9999;
+      for (let move of validMoves) {
+        const sim = executeMove(move, board, true);
+        const gain = sim.newBoard[13] - board[13];
+        const extraTurnBonus = sim.nextTurn === 'OPPONENT' ? 10 : 0;
+        const score = gain * 2 + extraTurnBonus;
+        
+        if (score > bestScore) {
+          bestScore = score;
+          selectedMove = move;
+        }
+      }
+    }
+
+    const result = executeMove(selectedMove, board);
+    setBoard(result.newBoard);
+    setTurn(result.nextTurn);
+    
+    // AI kendi hamlesi hakkında yorum yapsın
+    if(result.message) {
+         getAiCommentary(result.message, false);
+    }
+
+    if (result.message) setLastMessage(result.message);
+    else setLastMessage(result.nextTurn === 'PLAYER' ? `${username} oynuyor...` : "Bilgisayar oynadı.");
+  };
+
+  const resetGame = () => {
+    setBoard([...INITIAL_BOARD]);
+    setTurn('PLAYER');
+    setGameState('PLAYING');
+    setWinner(null);
+    setLastMessage("Yeni oyun başladı. Başarılar!");
+    setAiComment("");
+    setHint(null);
+  };
+
+  const renderSeeds = (count: number, isTreasury = false) => {
+    if (count === 0) return null;
+    const maxVisualSeeds = isTreasury ? 20 : 10;
+    const visualCount = Math.min(count, maxVisualSeeds);
+    
+    return (
+      <div className="relative w-full h-full flex items-center justify-center">
+        <div className="absolute inset-0 flex flex-wrap content-center justify-center p-2 gap-1 pointer-events-none">
+           {Array.from({ length: visualCount }).map((_, i) => (
+             <div 
+               key={i} 
+               className={`rounded-full shadow-sm border border-black/10
+                 ${isTreasury ? 'w-3 h-3 md:w-4 md:h-4' : 'w-3 h-3 md:w-4 md:h-4'}
+                 ${i % 3 === 0 ? 'bg-amber-100' : i % 3 === 1 ? 'bg-blue-200' : 'bg-green-200'}
+               `}
+               style={{
+                 transform: `translate(${Math.random() * 4 - 2}px, ${Math.random() * 4 - 2}px)`
+               }}
+             />
+           ))}
+        </div>
+        <span className="relative z-10 font-bold text-white text-xl md:text-2xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+          {count}
+        </span>
+      </div>
+    );
+  };
+
+  const player1Name = username;
+  const player2Name = gameMode === 'AI' ? 'GEMINI AI' : 'OYUNCU 2';
+
+  const getWinnerMessage = () => {
+      if (winner === 'PLAYER') return `${player1Name} KAZANDI!`;
+      if (winner === 'OPPONENT') return `${player2Name} KAZANDI!`;
+      return "BERABERE!";
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-80px)] p-4">
+      {/* BAŞLIK & SKOR */}
+      <div className="w-full max-w-4xl mb-6 flex flex-col items-center">
+        <div className="flex w-full justify-between items-center mb-4 px-4">
+            <button onClick={onExit} className="text-stone-500 hover:text-stone-800 font-bold flex items-center gap-1">
+                ← Menü
+            </button>
+            <h1 className="text-3xl font-bold text-amber-900 flex items-center gap-2">
+                {gameMode === 'PVP' ? <Users /> : <Brain />} 
+                {gameMode === 'PVP' ? '2 Kişilik Mangala' : 'Gemini Mangala'}
+            </h1>
+            <div className="w-16"></div>
+        </div>
+        
+        {/* SCOREBOARD */}
+        <div className="flex w-full justify-between items-center bg-white p-4 rounded-xl shadow-md border-l-4 border-amber-600 relative">
+           <div className={`flex flex-col items-center transition-all ${turn === 'PLAYER' ? 'opacity-100 scale-105' : 'opacity-60'}`}>
+              <div className="flex items-center gap-2 text-blue-700 font-bold max-w-[120px] truncate">
+                 <User size={20}/> {player1Name.toUpperCase()}
+              </div>
+              <span className="text-3xl font-bold">{board[6]}</span>
+           </div>
+
+           <div className="flex flex-col items-center text-center px-4 flex-1">
+              <div className="text-sm font-semibold text-gray-500 mb-1">DURUM</div>
+              <div className="text-amber-800 font-bold animate-pulse px-3 py-1 bg-amber-100 rounded-full text-sm md:text-base whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px] md:max-w-none">
+                {gameState === 'ENDED' ? getWinnerMessage() : lastMessage}
+              </div>
+              
+              {/* GEMINI KONUŞMA BALONU */}
+              {gameMode === 'AI' && aiComment && (
+                  <div className="absolute top-16 md:top-20 right-0 md:right-20 z-20 max-w-[200px] animate-bounce-slow">
+                      <div className="bg-white border-2 border-purple-500 text-purple-800 p-2 rounded-lg rounded-tr-none text-xs md:text-sm shadow-lg relative">
+                          {isAiThinking ? <span className="animate-pulse">...</span> : `"${aiComment}"`}
+                          <div className="absolute -top-2 right-0 w-4 h-4 bg-white border-t-2 border-r-2 border-purple-500 transform rotate-45"></div>
+                      </div>
+                  </div>
+              )}
+           </div>
+
+           <div className={`flex flex-col items-center transition-all ${turn === 'OPPONENT' ? 'opacity-100 scale-105' : 'opacity-60'}`}>
+              <div className="flex items-center gap-2 text-purple-700 font-bold">
+                 {player2Name} {gameMode === 'AI' ? <Sparkles size={20}/> : <User size={20}/>}
+              </div>
+              <span className="text-3xl font-bold">{board[13]}</span>
+           </div>
+        </div>
+      </div>
+
+      {/* İPUCU BUTONU (Sadece Oyuncu Sırasındayken) */}
+      {turn === 'PLAYER' && gameState === 'PLAYING' && (
+          <div className="mb-4 w-full max-w-5xl flex justify-center">
+              {hint ? (
+                  <div className="bg-blue-100 text-blue-800 p-3 rounded-lg shadow-md border border-blue-300 flex items-center gap-2 animate-fade-in max-w-lg">
+                      <Brain size={18} className="shrink-0"/>
+                      <span className="text-sm">{hint}</span>
+                      <button onClick={() => setHint(null)} className="ml-auto text-blue-500 hover:text-blue-900 font-bold">✕</button>
+                  </div>
+              ) : (
+                <button 
+                  onClick={getStrategicHint}
+                  disabled={isGettingHint}
+                  className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-5 py-2 rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 text-sm font-bold"
+                >
+                    {isGettingHint ? <RefreshCw className="animate-spin" size={16}/> : <Sparkles size={16}/>}
+                    {isGettingHint ? "Gemini Analiz Ediyor..." : "Gemini'dan İpucu Al"}
+                </button>
+              )}
+          </div>
+      )}
+
+      {/* OYUN ALANI (TAHTA) */}
+      <div className="relative bg-[#5D4037] p-4 md:p-8 rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-8 border-[#3E2723] w-full max-w-5xl">
+        
+        <div className="flex justify-between h-64 md:h-80 gap-2 md:gap-4">
+          
+          {/* RAKİP HAZİNESİ (SOL) */}
+          <div className="w-24 md:w-32 h-full bg-[#3E2723] rounded-full shadow-inner flex items-center justify-center border-4 border-[#8D6E63] relative overflow-hidden">
+             {renderSeeds(board[13], true)}
+          </div>
+
+          {/* KUYULAR ALANI */}
+          <div className="flex-1 flex flex-col justify-between py-2">
+            
+            {/* RAKİP KUYULARI (Üst Sıra: 12 -> 7) */}
+            <div className={`flex justify-around mb-4 p-2 rounded-xl transition-colors ${turn === 'OPPONENT' && gameMode === 'PVP' ? 'bg-white/10' : ''}`}>
+              {[12, 11, 10, 9, 8, 7].map((index) => {
+                const canClick = gameMode === 'PVP' && turn === 'OPPONENT' && board[index] > 0 && gameState !== 'ENDED';
+                return (
+                    <div 
+                        key={index} 
+                        onClick={() => canClick && handlePitClick(index)}
+                        className={`w-12 h-12 md:w-20 md:h-20 bg-[#4E342E] rounded-full flex items-center justify-center shadow-[inset_0_4px_8px_rgba(0,0,0,0.6)] border-2 border-[#8D6E63] relative transition-all
+                            ${turn === 'OPPONENT' && board[index] > 0 && gameMode === 'PVP' ? 'cursor-pointer hover:bg-[#5D4037] ring-4 ring-red-400' : ''}
+                            ${turn === 'OPPONENT' && board[index] > 0 && gameMode === 'AI' ? 'ring-2 ring-purple-400 opacity-90' : ''}
+                        `}
+                    >
+                        <span className="absolute -top-6 text-white/30 text-xs font-bold">{index}</span>
+                        {renderSeeds(board[index])}
+                    </div>
+                );
+              })}
+            </div>
+
+            {/* Orta Çizgi */}
+            <div className="w-full h-1 bg-[#8D6E63]/30 rounded-full mx-auto my-1"></div>
+
+            {/* OYUNCU KUYULARI (Alt Sıra: 0 -> 5) */}
+            <div className={`flex justify-around mt-4 p-2 rounded-xl transition-colors ${turn === 'PLAYER' ? 'bg-white/10' : ''}`}>
+              {[0, 1, 2, 3, 4, 5].map((index) => {
+                const canClick = turn === 'PLAYER' && board[index] > 0 && gameState !== 'ENDED';
+                return (
+                    <button 
+                    key={index}
+                    onClick={() => handlePitClick(index)}
+                    disabled={!canClick}
+                    className={`w-12 h-12 md:w-20 md:h-20 bg-[#4E342E] rounded-full flex items-center justify-center shadow-[inset_0_4px_8px_rgba(0,0,0,0.6)] border-2 border-[#8D6E63] relative transition-all active:scale-95
+                        ${canClick ? 'cursor-pointer hover:bg-[#5D4037] ring-4 ring-green-400 hover:shadow-[0_0_15px_rgba(74,222,128,0.5)]' : 'cursor-default opacity-90'}
+                    `}
+                    >
+                    {renderSeeds(board[index])}
+                    <span className="absolute -bottom-6 text-white/30 text-xs font-bold">{index + 1}</span>
+                    </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* OYUNCU HAZİNESİ (SAĞ) */}
+          <div className="w-24 md:w-32 h-full bg-[#3E2723] rounded-full shadow-inner flex items-center justify-center border-4 border-[#8D6E63] relative overflow-hidden">
+             {renderSeeds(board[6], true)}
+          </div>
+          
+        </div>
+      </div>
+
+      {/* KONTROLLER */}
+      <div className="mt-8 flex gap-4 flex-wrap justify-center">
+        <button 
+          onClick={resetGame}
+          className="flex items-center gap-2 px-6 py-3 bg-white text-stone-800 rounded-lg shadow hover:bg-stone-50 transition-colors font-bold"
+        >
+          <RefreshCw size={18} /> Yeniden Başlat
+        </button>
+
+        {gameMode === 'AI' && (
+            <button 
+            onClick={() => setDifficulty(prev => prev === 'EASY' ? 'HARD' : 'EASY')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg shadow text-white transition-colors font-bold w-40 justify-center
+                ${difficulty === 'HARD' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-blue-500 hover:bg-blue-600'}
+            `}
+            >
+            {difficulty === 'HARD' ? <Brain size={18} /> : <Users size={18} />}
+            {difficulty === 'HARD' ? 'Gemini (Zor)' : 'Kolay'}
+            </button>
+        )}
+
+        <button
+           onClick={() => setShowRules(!showRules)}
+           className="flex items-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-lg shadow hover:bg-amber-700 transition-colors font-bold"
+        >
+            <Info size={18} /> Kurallar
+        </button>
+      </div>
+
+      {/* KURALLAR MODALI */}
+      {showRules && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl relative">
+                  <button onClick={() => setShowRules(false)} className="absolute top-4 right-4 text-gray-500 hover:text-black font-bold text-xl">✕</button>
+                  <h2 className="text-2xl font-bold text-amber-800 mb-4 border-b pb-2">Mangala Kuralları</h2>
+                  <ul className="space-y-3 text-gray-700 text-sm md:text-base list-disc pl-5">
+                      <li><strong>Amaç:</strong> Hazinenizde (sağdaki büyük kuyu) en çok taşı biriktirmek.</li>
+                      <li><strong>Hareket:</strong> Kendi bölgenizden bir kuyu seçin. Taşları saat yönünün tersine tek tek dağıtın.</li>
+                      <li><strong>Sıra Tekrarı:</strong> Son taş hazinenize düşerse, tekrar oynarsınız.</li>
+                      <li><strong>Çift Kuralı:</strong> Son taş rakip kuyuya düşer ve oradaki taş sayısını ÇİFT yaparsa, o kuyudaki tüm taşları alırsınız.</li>
+                      <li><strong>Boş Kuyu Kuralı:</strong> Son taş kendi boş kuyunuza düşerse ve karşısındaki rakip kuyusu doluysa, hem kendi taşınızı hem de rakibin taşlarını alırsınız.</li>
+                  </ul>
+                  <button 
+                    onClick={() => setShowRules(false)}
+                    className="mt-6 w-full py-2 bg-amber-600 text-white rounded-lg font-bold hover:bg-amber-700"
+                  >
+                      Anladım
+                  </button>
+              </div>
+          </div>
+      )}
+
+    </div>
+  );
+}
