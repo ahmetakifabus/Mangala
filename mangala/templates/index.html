@@ -16,6 +16,8 @@
         .animate-bounce-slow { animation: bounce-slow 3s infinite; }
         @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+        @keyframes pulse-border { 0% { border-color: rgba(59, 130, 246, 0.5); } 50% { border-color: rgba(59, 130, 246, 1); } 100% { border-color: rgba(59, 130, 246, 0.5); } }
+        .lobby-input:focus { animation: pulse-border 2s infinite; }
     </style>
 </head>
 <body class="bg-stone-100 text-stone-800 font-sans">
@@ -37,7 +39,9 @@
             Lock: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
             Gamepad2: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="15" x2="15.01" y1="13" y2="13"/><line x1="18" x2="18.01" y1="11" y2="11"/><rect width="20" height="12" x="2" y="6" rx="2"/></svg>,
             Sparkles: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M3 5h4"/><path d="M3 9h4"/></svg>,
-            Mail: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            Mail: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>,
+            Cloud: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19c0-3.037-2.463-5.5-5.5-5.5S6.5 15.963 6.5 19"/><path d="M17.5 19c2.485 0 4.5-2.015 4.5-4.5S19.985 10 17.5 10c-.15 0-.298.008-.445.023A6.002 6.002 0 0 0 5.503 12.023C5.356 12.008 5.208 12 5.06 12 2.816 12 1 13.816 1 16.06c0 2.243 1.816 4.06 4.06 4.06"/></svg>,
+            Zap: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         };
 
         const INITIAL_BOARD = [4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0];
@@ -47,21 +51,24 @@
             const [view, setView] = useState('AUTH');
             const [user, setUser] = useState(null);
             const [gameMode, setGameMode] = useState('AI');
+            const [lobbyId, setLobbyId] = useState(null);
 
             const handleLogin = (userData) => { setUser(userData); setView('MENU'); };
             const handleLogout = () => { setUser(null); setView('AUTH'); };
-            const startGame = (mode) => { setGameMode(mode); setView('GAME'); };
+            const startGame = (mode) => { setGameMode(mode); setView(mode === 'ONLINE' ? 'LOBBY' : 'GAME'); };
+            const joinLobby = (id) => { setLobbyId(id); setView('GAME'); };
 
             return (
                 <div className="min-h-screen">
                     {view === 'AUTH' && <AuthScreen onLogin={handleLogin} />}
                     {view === 'MENU' && user && <MenuScreen username={user.username} onStartGame={startGame} onLogout={handleLogout} />}
-                    {view === 'GAME' && user && <MangalaGame gameMode={gameMode} username={user.username} onExit={() => setView('MENU')} />}
+                    {view === 'LOBBY' && user && <LobbyScreen username={user.username} onJoin={joinLobby} onBack={() => setView('MENU')} />}
+                    {view === 'GAME' && user && <MangalaGame gameMode={gameMode} username={user.username} lobbyId={lobbyId} onExit={() => setView('MENU')} />}
                 </div>
             );
         }
 
-        // --- GİRİŞ / KAYIT EKRANI ---
+        // --- GİRİŞ / KAYIT EKRANI (Önceki gibi) ---
         function AuthScreen({ onLogin }) {
             const [username, setUsername] = useState('');
             const [email, setEmail] = useState('');
@@ -140,16 +147,93 @@
                 <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-stone-100 relative">
                     <button onClick={onLogout} className="absolute top-4 right-4 flex items-center gap-2 px-4 py-2 bg-white text-red-600 rounded-lg shadow hover:bg-red-50 font-medium"><Icons.LogOut /> Çıkış</button>
                     <div className="text-center mb-10"><h1 className="text-4xl font-bold text-amber-900 mb-2">Hoşgeldin, {username}!</h1><p className="text-stone-600 text-lg">Nasıl oynamak istersin?</p></div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
-                        <button onClick={() => onStartGame('AI')} className="group relative bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all border-l-8 border-purple-600 hover:-translate-y-1 text-left"><div className="absolute top-4 right-4 bg-purple-100 p-3 rounded-full text-purple-600"><Icons.Brain /></div><h3 className="text-2xl font-bold text-gray-800 mb-2">Gemini Yapay Zeka</h3><p className="text-gray-500 mb-6">Seni analiz eden akıllı rakip.</p><span className="inline-flex items-center text-purple-700 font-bold group-hover:gap-2 transition-all">Başla <Icons.ArrowRight className="ml-2" /></span></button>
-                        <button onClick={() => onStartGame('PVP')} className="group relative bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all border-l-8 border-green-600 hover:-translate-y-1 text-left"><div className="absolute top-4 right-4 bg-green-100 p-3 rounded-full text-green-600"><Icons.Users /></div><h3 className="text-2xl font-bold text-gray-800 mb-2">2 Kişilik</h3><p className="text-gray-500 mb-6">Arkadaşınla yan yana oyna.</p><span className="inline-flex items-center text-green-700 font-bold group-hover:gap-2 transition-all">Başla <Icons.ArrowRight className="ml-2" /></span></button>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl">
+                        <button onClick={() => onStartGame('AI')} className="group relative bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all border-l-8 border-purple-600 hover:-translate-y-1 text-left"><div className="absolute top-4 right-4 bg-purple-100 p-3 rounded-full text-purple-600"><Icons.Brain /></div><h3 className="text-2xl font-bold text-gray-800 mb-2">Gemini AI</h3><p className="text-gray-500 mb-6">Akıllı rakibe karşı oyna.</p><span className="inline-flex items-center text-purple-700 font-bold group-hover:gap-2 transition-all">Başla <Icons.ArrowRight className="ml-2" /></span></button>
+                        <button onClick={() => onStartGame('PVP')} className="group relative bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all border-l-8 border-green-600 hover:-translate-y-1 text-left"><div className="absolute top-4 right-4 bg-green-100 p-3 rounded-full text-green-600"><Icons.Users /></div><h3 className="text-2xl font-bold text-gray-800 mb-2">2 Kişilik</h3><p className="text-gray-500 mb-6">Aynı cihazda oyna.</p><span className="inline-flex items-center text-green-700 font-bold group-hover:gap-2 transition-all">Başla <Icons.ArrowRight className="ml-2" /></span></button>
+                        <button onClick={() => onStartGame('ONLINE')} className="group relative bg-white p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all border-l-8 border-blue-600 hover:-translate-y-1 text-left"><div className="absolute top-4 right-4 bg-blue-100 p-3 rounded-full text-blue-600"><Icons.Cloud /></div><h3 className="text-2xl font-bold text-gray-800 mb-2">Online Oyna</h3><p className="text-gray-500 mb-6">Uzaktaki arkadaşınla oyna.</p><span className="inline-flex items-center text-blue-700 font-bold group-hover:gap-2 transition-all">Lobiye Git <Icons.ArrowRight className="ml-2" /></span></button>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- LOBİ EKRANI (Online) ---
+        function LobbyScreen({ username, onJoin, onBack }) {
+            const [mode, setMode] = useState('CREATE'); // CREATE or JOIN
+            const [joinCode, setJoinCode] = useState('');
+            const [createdCode, setCreatedCode] = useState(null);
+            const [loading, setLoading] = useState(false);
+
+            const handleCreateLobby = async () => {
+                setLoading(true);
+                // Burada backend'e istek atılır. Şimdilik simüle ediyoruz.
+                setTimeout(() => {
+                    const randomCode = Math.floor(1000 + Math.random() * 9000).toString();
+                    setCreatedCode(randomCode);
+                    setLoading(false);
+                }, 1000);
+            };
+
+            const handleJoinLobby = () => {
+                if (!joinCode) return;
+                onJoin(joinCode);
+            };
+
+            if (createdCode) {
+                return (
+                    <div className="flex flex-col items-center justify-center min-h-screen bg-stone-100 p-4">
+                        <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md w-full">
+                            <h2 className="text-2xl font-bold text-blue-800 mb-4">Lobi Oluşturuldu</h2>
+                            <div className="bg-blue-50 border-2 border-blue-200 p-6 rounded-xl mb-6">
+                                <p className="text-gray-600 text-sm mb-2">Lobi Kodu</p>
+                                <p className="text-5xl font-mono font-bold tracking-widest text-blue-600">{createdCode}</p>
+                            </div>
+                            <div className="flex items-center justify-center gap-2 text-gray-500 mb-6 animate-pulse">
+                                <Icons.RefreshCw className="animate-spin" /> Rakip bekleniyor...
+                            </div>
+                            <button onClick={() => onJoin(createdCode)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">Oyuna Gir (Test)</button>
+                            <button onClick={() => setCreatedCode(null)} className="mt-4 text-gray-500 hover:text-gray-800 text-sm">İptal</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen bg-stone-100 p-4 relative">
+                    <button onClick={onBack} className="absolute top-4 left-4 flex items-center gap-2 px-4 py-2 bg-white text-gray-600 rounded-lg shadow font-medium">← Geri</button>
+                    <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full">
+                        <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">Online Lobi</h2>
+                        <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+                            <button onClick={() => setMode('CREATE')} className={`flex-1 py-2 rounded-md font-bold transition-all ${mode === 'CREATE' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Oluştur</button>
+                            <button onClick={() => setMode('JOIN')} className={`flex-1 py-2 rounded-md font-bold transition-all ${mode === 'JOIN' ? 'bg-white shadow text-green-600' : 'text-gray-500 hover:text-gray-700'}`}>Katıl</button>
+                        </div>
+
+                        {mode === 'CREATE' ? (
+                            <div className="text-center">
+                                <div className="p-6 bg-blue-50 rounded-xl border border-blue-100 mb-6">
+                                    <Icons.Cloud className="w-16 h-16 mx-auto text-blue-400 mb-3" />
+                                    <p className="text-gray-600">Yeni bir oyun odası kur ve arkadaşınla kodu paylaş.</p>
+                                </div>
+                                <button onClick={handleCreateLobby} disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 flex items-center justify-center gap-2">
+                                    {loading ? 'Oluşturuluyor...' : 'Lobi Oluştur'} {loading && <Icons.RefreshCw className="animate-spin" />}
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="text-center">
+                                <div className="p-6 bg-green-50 rounded-xl border border-green-100 mb-6">
+                                    <Icons.Users className="w-16 h-16 mx-auto text-green-400 mb-3" />
+                                    <p className="text-gray-600">Arkadaşından aldığın 4 haneli kodu gir.</p>
+                                </div>
+                                <input type="text" value={joinCode} onChange={e => setJoinCode(e.target.value)} maxLength="4" placeholder="KOD" className="w-full text-center text-3xl font-mono tracking-widest py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 outline-none lobby-input mb-4" />
+                                <button onClick={handleJoinLobby} disabled={!joinCode} className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 disabled:opacity-50">Katıl</button>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
         }
 
         // --- OYUN EKRANI ---
-        function MangalaGame({ gameMode, username, onExit }) {
+        function MangalaGame({ gameMode, username, lobbyId, onExit }) {
             const [board, setBoard] = useState([...INITIAL_BOARD]);
             const [turn, setTurn] = useState('PLAYER');
             const [gameState, setGameState] = useState('PLAYING');
@@ -165,11 +249,22 @@
             const isPlayerPit = (i) => i >= 0 && i <= 5;
             const isOpponentPit = (i) => i >= 7 && i <= 12;
 
+            // Online Polling
+            useEffect(() => {
+                if (gameMode !== 'ONLINE') return;
+                const interval = setInterval(() => {
+                    // Burada backend'e "Oyun durumu nedir?" diye sorulur.
+                    // Şimdilik simüle ediyoruz:
+                    // fetch(`/api/game-state?lobby=${lobbyId}`).then(...)
+                }, 2000);
+                return () => clearInterval(interval);
+            }, [gameMode, lobbyId]);
+
             const getStrategicHint = async () => {
                 if (isGettingHint || gameState === 'ENDED') return;
                 setIsGettingHint(true); setHint(null);
                 try {
-                    const prompt = `Sen bir Mangala ustasısın. Tahta (0-5 oyuncu, 6 oyuncu hazine, 7-12 rakip, 13 rakip hazine): ${JSON.stringify(board)}. Oyuncu (0-5) için en iyi hamleyi (sadece kuyu numarası ve kısa bir neden) Türkçe açıkla.`;
+                    const prompt = `Sen bir Mangala ustasısın. Tahta: ${JSON.stringify(board)}. Oyuncu (0-5) için en iyi hamleyi (sadece kuyu numarası ve kısa bir neden) Türkçe açıkla.`;
                     const res = await fetch('/api/ask-gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
                     const data = await res.json();
                     if (res.ok) setHint(data.text); else setHint("Bağlantı hatası.");
@@ -187,9 +282,6 @@
                 } catch (e) { } finally { setIsAiThinking(false); }
             };
 
-            // ... (Oyun mantığı executeMove, checkGameOver buraya eklenecek, önceki kodun aynısı) ...
-            // Yer kazanmak için mantık fonksiyonlarını kısaltarak ekliyorum, mantık değişmedi.
-            
             const checkGameOver = useCallback((cb) => {
                 const pE = cb.slice(0, 6).every(s => s === 0), oE = cb.slice(7, 13).every(s => s === 0);
                 if (pE || oE) {
@@ -215,13 +307,21 @@
 
             const handlePitClick = (index) => {
                 if (gameState === 'ENDED' || (gameMode === 'AI' && turn === 'OPPONENT')) return;
+                // Online modda sıra bizde değilse tıklamayı engelle
+                if (gameMode === 'ONLINE' && turn !== 'PLAYER') return;
+
                 setHint(null);
                 if ((turn === 'PLAYER' && !isPlayerPit(index)) || (turn === 'OPPONENT' && !isOpponentPit(index)) || board[index] === 0) return;
                 
                 const res = executeMove(index, board);
                 setBoard(res.newBoard); setTurn(res.nextTurn);
                 if (gameMode === 'AI' && res.message) getAiCommentary(res.message, true);
-                setLastMessage(res.message || (res.nextTurn === 'PLAYER' ? `${username} oynuyor...` : (gameMode === 'AI' ? "Gemini düşünüyor..." : "2. Oyuncu oynuyor...")));
+                setLastMessage(res.message || (res.nextTurn === 'PLAYER' ? `${username} oynuyor...` : (gameMode === 'AI' ? "Gemini düşünüyor..." : (gameMode === 'ONLINE' ? "Rakip oynuyor..." : "2. Oyuncu oynuyor..."))));
+                
+                // Online modda hamleyi sunucuya gönder (Simüle)
+                if (gameMode === 'ONLINE') {
+                    // fetch('/api/move', { ... })
+                }
             };
 
             useEffect(() => {
@@ -231,7 +331,12 @@
 
             const makeCpuMove = () => {
                 const moves = [7,8,9,10,11,12].filter(i => board[i] > 0);
-                if (moves.length === 0) return;
+                if (moves.length === 0) {
+                    // AI'nin taşı bitti ama sıra ondaysa, oyun bitmiştir.
+                    // Taşları dağıt ve oyunu bitir.
+                    checkGameOver(board);
+                    return;
+                }
                 let move = moves[0];
                 if (difficulty === 'HARD') {
                     let best = -9999;
@@ -262,17 +367,22 @@
                 );
             };
 
+            const player1Name = username;
+            const player2Name = gameMode === 'AI' ? 'GEMINI AI' : (gameMode === 'ONLINE' ? 'RAKİP' : 'OYUNCU 2');
+            const getWinnerMessage = () => { if (winner === 'PLAYER') return `${player1Name} KAZANDI!`; if (winner === 'OPPONENT') return `${player2Name} KAZANDI!`; return "BERABERE!"; };
+
             return (
                 <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-stone-100">
                     <div className="w-full max-w-4xl mb-6">
                         <button onClick={onExit} className="text-stone-500 hover:text-stone-800 font-bold mb-2 flex items-center gap-1">← Menü</button>
+                        {gameMode === 'ONLINE' && lobbyId && <div className="text-xs text-center text-gray-400 mb-2 font-mono">Lobi: {lobbyId}</div>}
                         <div className="flex w-full justify-between items-center bg-white p-4 rounded-xl shadow-md border-l-4 border-amber-600 relative">
-                            <div className={`flex flex-col items-center transition-all ${turn === 'PLAYER' ? 'opacity-100 scale-105' : 'opacity-60'}`}><div className="flex items-center gap-2 text-blue-700 font-bold"><Icons.User /> {username.toUpperCase()}</div><span className="text-3xl font-bold">{board[6]}</span></div>
+                            <div className={`flex flex-col items-center transition-all ${turn === 'PLAYER' ? 'opacity-100 scale-105' : 'opacity-60'}`}><div className="flex items-center gap-2 text-blue-700 font-bold"><Icons.User /> {player1Name.toUpperCase()}</div><span className="text-3xl font-bold">{board[6]}</span></div>
                             <div className="flex flex-col items-center text-center px-4 flex-1">
-                                <div className="text-amber-800 font-bold animate-pulse-slow px-3 py-1 bg-amber-100 rounded-full text-sm">{gameState === 'ENDED' ? (winner === 'PLAYER' ? "KAZANDIN!" : winner === 'OPPONENT' ? "KAYBETTİN" : "BERABERE") : lastMessage}</div>
+                                <div className="text-amber-800 font-bold animate-pulse-slow px-3 py-1 bg-amber-100 rounded-full text-sm">{gameState === 'ENDED' ? getWinnerMessage() : lastMessage}</div>
                                 {gameMode === 'AI' && aiComment && <div className="absolute top-16 right-0 max-w-[200px] animate-bounce-slow"><div className="bg-white border-2 border-purple-500 text-purple-800 p-2 rounded-lg rounded-tr-none text-xs shadow-lg relative">{isAiThinking ? "..." : `"${aiComment}"`}<div className="absolute -top-2 right-0 w-4 h-4 bg-white border-t-2 border-r-2 border-purple-500 transform rotate-45"></div></div></div>}
                             </div>
-                            <div className={`flex flex-col items-center transition-all ${turn === 'OPPONENT' ? 'opacity-100 scale-105' : 'opacity-60'}`}><div className="flex items-center gap-2 text-purple-700 font-bold">{gameMode === 'AI' ? 'GEMINI AI' : 'OYUNCU 2'} {gameMode === 'AI' ? <Icons.Sparkles /> : <Icons.User />}</div><span className="text-3xl font-bold">{board[13]}</span></div>
+                            <div className={`flex flex-col items-center transition-all ${turn === 'OPPONENT' ? 'opacity-100 scale-105' : 'opacity-60'}`}><div className="flex items-center gap-2 text-purple-700 font-bold">{player2Name} {gameMode === 'AI' ? <Icons.Sparkles /> : <Icons.User />}</div><span className="text-3xl font-bold">{board[13]}</span></div>
                         </div>
                     </div>
 
@@ -289,12 +399,19 @@
                     )}
 
                     <div className="relative bg-[#5D4037] p-4 md:p-8 rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-8 border-[#3E2723] w-full max-w-5xl">
+                        {gameMode === 'ONLINE' && turn === 'OPPONENT' && gameState === 'PLAYING' && (
+                            <div className="absolute inset-0 bg-black/10 z-10 rounded-[2.5rem] flex items-center justify-center">
+                                <div className="bg-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-bounce">
+                                    <Icons.Cloud className="text-blue-500 animate-pulse" /> Rakip düşüncesini aktarıyor...
+                                </div>
+                            </div>
+                        )}
                         <div className="flex justify-between h-64 md:h-80 gap-2 md:gap-4">
                             <div className="w-24 md:w-32 h-full bg-[#3E2723] rounded-full flex items-center justify-center border-4 border-[#8D6E63] relative overflow-hidden shadow-inner">{renderSeeds(board[13], true)}</div>
                             <div className="flex-1 flex flex-col justify-between py-2">
-                                <div className={`flex justify-around mb-4 p-2 rounded-xl transition-colors ${turn === 'OPPONENT' && gameMode === 'PVP' ? 'bg-white/10' : ''}`}>
+                                <div className={`flex justify-around mb-4 p-2 rounded-xl transition-colors ${turn === 'OPPONENT' && (gameMode === 'PVP' || gameMode === 'AI') ? 'bg-white/10' : ''}`}>
                                     {[12,11,10,9,8,7].map(i => (
-                                        <div key={i} onClick={() => handlePitClick(i)} className={`w-12 h-12 md:w-20 md:h-20 bg-[#4E342E] rounded-full flex items-center justify-center shadow-inner border-2 border-[#8D6E63] relative transition-all ${turn === 'OPPONENT' && board[i]>0 ? (gameMode==='PVP'?'cursor-pointer hover:bg-[#5D4037] ring-4 ring-red-400':'ring-2 ring-purple-400 opacity-90'):''}`}>
+                                        <div key={i} onClick={() => gameMode === 'PVP' && turn === 'OPPONENT' && board[i] > 0 && handlePitClick(i)} className={`w-12 h-12 md:w-20 md:h-20 bg-[#4E342E] rounded-full flex items-center justify-center shadow-inner border-2 border-[#8D6E63] relative transition-all ${turn === 'OPPONENT' && board[i]>0 ? (gameMode==='PVP'?'cursor-pointer hover:bg-[#5D4037] ring-4 ring-red-400':(gameMode==='AI'?'ring-2 ring-purple-400 opacity-90':'')):''}`}>
                                             <span className="absolute -top-6 text-white/30 text-xs font-bold">{i}</span>{renderSeeds(board[i])}
                                         </div>
                                     ))}
